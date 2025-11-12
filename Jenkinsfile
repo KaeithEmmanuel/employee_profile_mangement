@@ -17,12 +17,7 @@ pipeline {
                 git branch: 'master', url: 'https://github.com/KaeithEmmanuel/employee_profile_mangement.git'
             }
         }
-         stage('Check Docker') {
-            steps {
-                bat 'where docker'
-                bat 'docker --version'
-            }
-         }
+
         stage('Build') {
             steps {
                 // Build docker image using Dockerfile
