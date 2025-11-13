@@ -88,4 +88,5 @@ echo Container started.
             echo "❌ Build or deployment failed!"
         }
     }
+
 }
