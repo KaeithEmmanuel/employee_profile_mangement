@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         // Path to your kubeconfig on the Windows agent. Update if needed.
-        KUBECONFIG = "C:\Users\dmand\.kube\config"
+        KUBECONFIG = "C:/Users/dmand/.kube/config"
 
         // Docker image base name (no tag)
         DOCKER_IMAGE = "employeeprofilemanagement_image"
