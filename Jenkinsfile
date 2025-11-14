@@ -57,7 +57,7 @@ pipeline {
                 """
             }
         }
-
+        /*
         stage('Deploy to Kubernetes') {
             steps {
                 echo "📦 Applying namespace and service, then updating deployment image (Windows)"
@@ -76,6 +76,7 @@ pipeline {
                 """
             }
         }
+        */
     }
 
     post {
