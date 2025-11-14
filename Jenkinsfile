@@ -2,91 +2,88 @@ pipeline {
     agent any
 
     environment {
-        // Uncomment below if pushing to DockerHub
-        // DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
-        DOCKER_IMAGE = "employeeprofilemanagement_image"
-        CONTAINER_NAME = "employeeprofilemanagement"
+        // Path to your kubeconfig on the Windows agent. Update if needed.
+        KUBECONFIG = "C:\Users\dmand\.kube\config"
 
-        // Database URL used when dockerization is done for the application
+        // Docker image base name (no tag)
+        DOCKER_IMAGE = "employeeprofilemanagement_image"
+
+        // PostgreSQL database URL (change if needed)
         DB_URL = "jdbc:postgresql://host.docker.internal:5432/epms_db"
+        DB_USERNAME = "postgres"
+        DB_PASSWORD = "Kaeith@04"
+
+        // Kubernetes Namespace (must match namespace.yaml)
+        K8S_NAMESPACE = "employeemanagementsystem"
     }
 
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'master', url: 'https://github.com/KaeithEmmanuel/employee_profile_mangement.git'
+                git branch: 'master', url: 'https://github.com/KaeithEmmanuel/employee_profile_mangement'
             }
         }
 
-        stage('Build') {
+        stage('Build Docker Image') {
             steps {
-                // Build docker image using Dockerfile
-                // BUILD_NUMBER is provided by Jenkins automatically
-                bat "docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} -f Dockerfile ."
+                echo "🚀 Building Docker image (Windows agent)..."
+                // Use Windows bat command. Jenkins provides BUILD_NUMBER environment variable.
+                bat """
+                    docker build -t %DOCKER_IMAGE%:%BUILD_NUMBER% -f Dockerfile .
+                """
             }
         }
 
-        stage('Cleanup existing container') {
+        stage('Run Container Locally (optional)') {
             steps {
-                script {
-                    // This batch script will look for any container with the same name,
-                    // stop and forcibly remove it if found.
-                    bat """
-@echo off
-setlocal enabledelayedexpansion
+                echo "🐳 Running container locally on the Windows agent (optional)"
+                // stop + remove any existing container with same name, then run
+                bat """
+                    if exist "%ProgramFiles%\\docker\\docker.exe" (
+                        echo Docker is installed
+                    )
+                    REM Stop & remove if existing
+                    for /f "tokens=*" %%i in ('docker ps -aq -f name=employeeprofilemanagement') do (
+                        docker stop %%i || echo ignore
+                        docker rm -f %%i || echo ignore
+                    ) || echo "No running/existing container to remove"
 
-echo Checking for existing container named %CONTAINER_NAME%...
-
-rem get container id(s) that match the name filter (quiet mode - just IDs)
-for /f "delims=" %%i in ('docker ps -a -q -f "name=%CONTAINER_NAME%"') do (
-    set "CID=%%i"
-)
-
-if defined CID (
-    echo Found existing container with ID: %CID%
-    echo Stopping and removing container %CONTAINER_NAME%...
-    docker rm -f %CONTAINER_NAME%
-    if errorlevel 1 (
-        echo WARNING: failed to remove container %CONTAINER_NAME% (docker rm returned non-zero)
-        rem continue anyway; next run may fail if container still exists
-    ) else (
-        echo Successfully removed previous container %CONTAINER_NAME%.
-    )
-) else (
-    echo No existing container named %CONTAINER_NAME% found. Continuing.
-)
-
-endlocal
-"""
-                }
+                    docker run -d --name employeeprofilemanagement ^
+                        -e SPRING_DATASOURCE_URL="%DB_URL%" ^
+                        -e SPRING_DATASOURCE_USERNAME="%DB_USERNAME%" ^
+                        -e SPRING_DATASOURCE_PASSWORD="%DB_PASSWORD%" ^
+                        -p 8200:8200 ^
+                        %DOCKER_IMAGE%:%BUILD_NUMBER%
+                """
             }
         }
 
-        stage('Run Container') {
+        stage('Deploy to Kubernetes') {
             steps {
-                script {
-                    // Run new container (detached) with the desired env var and port mapping
-                    bat """
-echo Running new container %CONTAINER_NAME% from image ${DOCKER_IMAGE}:${BUILD_NUMBER}...
-docker run -e DB_URL="%DB_URL%" -d --name %CONTAINER_NAME% -p 8200:8200 ${DOCKER_IMAGE}:${BUILD_NUMBER}
-if errorlevel 1 (
-    echo ERROR: docker run failed.
-    exit /b 1
-)
-echo Container started.
-"""
-                }
+                echo "📦 Applying namespace and service, then updating deployment image (Windows)"
+                // Apply namespace and service, then use kubectl set image to update the deployment image
+                bat """
+                    kubectl --kubeconfig="%KUBECONFIG%" apply -f namespace.yaml
+                    kubectl --kubeconfig="%KUBECONFIG%" -n %K8S_NAMESPACE% apply -f service.yaml
+                    kubectl --kubeconfig="%KUBECONFIG%" -n %K8S_NAMESPACE% apply -f deployment.yaml
+
+                    REM Update the deployment image using kubectl set image (works cross-platform)
+                    kubectl --kubeconfig="%KUBECONFIG%" -n %K8S_NAMESPACE% set image deployment/employeemanagementsystem-deployment \
+                      employeemanagementsystem-container=%DOCKER_IMAGE%:%BUILD_NUMBER% --record
+
+                    REM Wait for rollout to finish
+                    kubectl --kubeconfig="%KUBECONFIG%" -n %K8S_NAMESPACE% rollout status deployment/employeemanagementsystem-deployment --timeout=120s
+                """
             }
         }
     }
 
     post {
         success {
-            echo "✅ Checkout, Build, Dockerize & Deploy completed successfully!"
+            echo "🎉 SUCCESS: Build and Kubernetes deployment completed!"
         }
         failure {
-            echo "❌ Build or deployment failed!"
+            echo "❌ Pipeline failed!"
         }
     }
-
 }

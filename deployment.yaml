@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: employeemanagementsystem-deployment
+  namespace: employeemanagementsystem
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: employeemanagementsystem
+  template:
+    metadata:
+      labels:
+        app: employeemanagementsystem
+    spec:
+      containers:
+        - name: employeemanagementsystem-container
+          # Placeholder image — the Jenkins pipeline will update the image tag at deploy-time
+          image: employeeprofilemanagement_image:latest
+          ports:
+            - containerPort: 8200
+          env:
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://host.docker.internal:5432/epms_db"
+            - name: SPRING_DATASOURCE_USERNAME
+              value: "postgres"
+            - name: SPRING_DATASOURCE_PASSWORD
+              value: "Kaeith@04"
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
